@@ -24,6 +24,21 @@ const getActor = (req) => {
   };
 };
 
+function applyUploadedEmployeeFiles(target, files = {}) {
+  if (files?.contract?.[0]) {
+    target.contractFileName = files.contract[0].originalname;
+    target.contractBase64   = files.contract[0].buffer.toString("base64");
+  }
+  if (files?.profilePic?.[0]) {
+    target.profilePicFileName = files.profilePic[0].originalname;
+    target.profilePicBase64   = files.profilePic[0].buffer.toString("base64");
+  }
+  if (files?.idDoc?.[0]) {
+    target.idDocFileName = files.idDoc[0].originalname;
+    target.idDocBase64   = files.idDoc[0].buffer.toString("base64");
+  }
+}
+
 // Small helper: sanitize/normalize body
 const normalize = (b = {}) => ({
   firstName: (b.firstName || "").trim(),
@@ -203,18 +218,7 @@ exports.create = async (req, res) => {
     }
 
     // Optional file blobs (demo only)
-    if (req.files?.contract?.[0]) {
-      employeeData.contractFileName = req.files.contract[0].originalname;
-      employeeData.contractBase64   = req.files.contract[0].buffer.toString("base64");
-    }
-    if (req.files?.profilePic?.[0]) {
-      employeeData.profilePicFileName = req.files.profilePic[0].originalname;
-      employeeData.profilePicBase64   = req.files.profilePic[0].buffer.toString("base64");
-    }
-    if (req.files?.idDoc?.[0]) {
-      employeeData.idDocFileName = req.files.idDoc[0].originalname;
-      employeeData.idDocBase64   = req.files.idDoc[0].buffer.toString("base64");
-    }
+    applyUploadedEmployeeFiles(employeeData, req.files);
 
     const ref = await refEmployees(tenantId).push(employeeData);
     const snap = await ref.once("value");
@@ -248,7 +252,7 @@ exports.update = async (req, res) => {
       "employeeType","startDate","endDate","status",
       "salary","salaryCurrency","payFrequency","gradeId","compensationEffectiveFrom",
       "bankName","accountNumber","iban",
-      "notes"
+      "notes","importStatus"
     ];
 
     const patch = { updatedAt: new Date().toISOString() };
@@ -276,18 +280,7 @@ exports.update = async (req, res) => {
       return res.status(400).json({ error: "endDate cannot be before startDate" });
     }
 
-    if (req.files?.contract?.[0]) {
-      patch.contractFileName = req.files.contract[0].originalname;
-      patch.contractBase64   = req.files.contract[0].buffer.toString("base64");
-    }
-    if (req.files?.profilePic?.[0]) {
-      patch.profilePicFileName = req.files.profilePic[0].originalname;
-      patch.profilePicBase64   = req.files.profilePic[0].buffer.toString("base64");
-    }
-    if (req.files?.idDoc?.[0]) {
-      patch.idDocFileName = req.files.idDoc[0].originalname;
-      patch.idDocBase64   = req.files.idDoc[0].buffer.toString("base64");
-    }
+    applyUploadedEmployeeFiles(patch, req.files);
 
     await node.update(patch);
     const snap = await node.once("value");
@@ -297,6 +290,35 @@ exports.update = async (req, res) => {
   } catch (e) {
     console.error("employees.update error:", e);
     res.status(500).json({ error: "Failed to update employee" });
+  }
+};
+
+/* -------------------------- updateDocuments -------------------------- */
+
+exports.updateDocuments = async (req, res) => {
+  try {
+    const tenantId = getTenantId(req);
+    if (!tenantId) return res.status(400).json({ error: "tenantId is required" });
+
+    const node = refEmployees(tenantId).child(req.params.id);
+    const snap = await node.once("value");
+    if (!snap.exists()) return res.status(404).json({ error: "Not found" });
+
+    const patch = { updatedAt: new Date().toISOString() };
+    applyUploadedEmployeeFiles(patch, req.files);
+
+    const hasDocument =
+      patch.contractBase64 || patch.profilePicBase64 || patch.idDocBase64;
+    if (!hasDocument) {
+      return res.status(400).json({ error: "Upload at least one document" });
+    }
+
+    await node.update(patch);
+    const after = await node.once("value");
+    res.json({ id: after.key, ...after.val() });
+  } catch (e) {
+    console.error("employees.updateDocuments error:", e);
+    res.status(500).json({ error: "Failed to update employee documents" });
   }
 };
 

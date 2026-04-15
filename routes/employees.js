@@ -41,6 +41,16 @@ router
   )
   .delete(ctrl.remove);
 
+router.put(
+  "/:id/documents",
+  upload.fields([
+    { name: "contract",   maxCount: 1 },
+    { name: "profilePic", maxCount: 1 },
+    { name: "idDoc",      maxCount: 1 },
+  ]),
+  ctrl.updateDocuments
+);
+
 // NEW: Salary endpoints
 router.get("/:id/salary", ctrl.getSalary);
 router.post("/:id/salary", ctrl.setSalary);
