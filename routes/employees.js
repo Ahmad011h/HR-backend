@@ -3,11 +3,23 @@ const express = require("express");
 const router = express.Router({ mergeParams: true });
 
 const multer = require("multer");
-const upload = multer({
-  limits: {
-    fileSize: 10 * 1024 * 1024,
-  },
-});
+const upload = multer();
+const employeeUpload = upload.fields([
+  { name: "contract",   maxCount: 1 },
+  { name: "profilePic", maxCount: 1 },
+  { name: "idDoc",      maxCount: 1 },
+]);
+
+const handleEmployeeUpload = (req, res, next) => {
+  employeeUpload(req, res, (err) => {
+    if (!err) return next();
+    return res.status(400).json({
+      error: "Failed to parse employee upload",
+      detail: err.message || String(err),
+      code: err.code || null,
+    });
+  });
+};
 
 const auth = require("../middlewares/auth");
 const tenant = require("../middlewares/tenant");
@@ -23,37 +35,15 @@ router.use(requireRole("owner", "admin", "hr", "manager", "superadmin"));
 router
   .route("/")
   .get(ctrl.list)
-  .post(
-    upload.fields([
-      { name: "contract",   maxCount: 1 },
-      { name: "profilePic", maxCount: 1 },
-      { name: "idDoc",      maxCount: 1 },
-    ]),
-    ctrl.create
-  );
+  .post(handleEmployeeUpload, ctrl.create);
+
+router.put("/:id/documents", handleEmployeeUpload, ctrl.updateDocuments);
 
 router
   .route("/:id")
   .get(ctrl.getOne)
-  .put(
-    upload.fields([
-      { name: "contract",   maxCount: 1 },
-      { name: "profilePic", maxCount: 1 },
-      { name: "idDoc",      maxCount: 1 },
-    ]),
-    ctrl.update
-  )
+  .put(handleEmployeeUpload, ctrl.update)
   .delete(ctrl.remove);
-
-router.put(
-  "/:id/documents",
-  upload.fields([
-    { name: "contract",   maxCount: 1 },
-    { name: "profilePic", maxCount: 1 },
-    { name: "idDoc",      maxCount: 1 },
-  ]),
-  ctrl.updateDocuments
-);
 
 // NEW: Salary endpoints
 router.get("/:id/salary", ctrl.getSalary);
