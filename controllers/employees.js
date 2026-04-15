@@ -91,10 +91,23 @@ async function applyUploadedEmployeeDocuments(target, files = {}, tenantId, empl
     const file = files?.[field]?.[0];
     if (!file) continue;
 
-    const uploaded = await uploadEmployeeFile({ tenantId, employeeId, field, file });
-    target[`${prefix}FileName`] = uploaded.fileName;
-    target[`${prefix}StoragePath`] = uploaded.storagePath;
-    target[`${prefix}Url`] = uploaded.url;
+    try {
+      const uploaded = await uploadEmployeeFile({ tenantId, employeeId, field, file });
+      target[`${prefix}FileName`] = uploaded.fileName;
+      target[`${prefix}StoragePath`] = uploaded.storagePath;
+      target[`${prefix}Url`] = uploaded.url;
+    } catch (storageErr) {
+      // Demo-safe fallback: keep small files in Realtime DB if Storage is not configured.
+      if (file.size > 2 * 1024 * 1024) {
+        throw new Error(
+          `Firebase Storage upload failed for ${field}: ${storageErr?.message || storageErr}`
+        );
+      }
+      target[`${prefix}FileName`] = file.originalname;
+      target[`${prefix}Base64`] = file.buffer.toString("base64");
+      target[`${prefix}StorageWarning`] =
+        `Stored as base64 fallback because Firebase Storage failed: ${storageErr?.message || storageErr}`;
+    }
     uploadedCount += 1;
   }
 
