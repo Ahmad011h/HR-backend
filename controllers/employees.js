@@ -1,5 +1,5 @@
 // server/controllers/employees.js
-const { db, admin } = require("../config/firebaseAdmin");
+const { db, admin, bucket } = require("../config/firebaseAdmin");
 
 // Resolve tenantId from middleware, path param, or header
 function getTenantId(req) {
@@ -37,6 +37,68 @@ function applyUploadedEmployeeFiles(target, files = {}) {
     target.idDocFileName = files.idDoc[0].originalname;
     target.idDocBase64   = files.idDoc[0].buffer.toString("base64");
   }
+}
+
+const safeFileName = (name = "document") =>
+  String(name)
+    .replace(/[/\\?%*:|"<>]/g, "-")
+    .replace(/\s+/g, "-")
+    .slice(0, 120);
+
+async function uploadEmployeeFile({ tenantId, employeeId, field, file }) {
+  const objectPath = [
+    "tenants",
+    tenantId,
+    "employees",
+    employeeId,
+    "documents",
+    `${field}-${Date.now()}-${safeFileName(file.originalname)}`,
+  ].join("/");
+
+  const storageFile = bucket.file(objectPath);
+  await storageFile.save(file.buffer, {
+    resumable: false,
+    metadata: {
+      contentType: file.mimetype || "application/octet-stream",
+      metadata: {
+        originalName: file.originalname,
+        field,
+      },
+    },
+  });
+
+  const [url] = await storageFile.getSignedUrl({
+    action: "read",
+    expires: "2500-01-01",
+  });
+
+  return {
+    fileName: file.originalname,
+    storagePath: objectPath,
+    url,
+  };
+}
+
+async function applyUploadedEmployeeDocuments(target, files = {}, tenantId, employeeId) {
+  const mapping = [
+    ["contract", "contract"],
+    ["profilePic", "profilePic"],
+    ["idDoc", "idDoc"],
+  ];
+
+  let uploadedCount = 0;
+  for (const [field, prefix] of mapping) {
+    const file = files?.[field]?.[0];
+    if (!file) continue;
+
+    const uploaded = await uploadEmployeeFile({ tenantId, employeeId, field, file });
+    target[`${prefix}FileName`] = uploaded.fileName;
+    target[`${prefix}StoragePath`] = uploaded.storagePath;
+    target[`${prefix}Url`] = uploaded.url;
+    uploadedCount += 1;
+  }
+
+  return uploadedCount;
 }
 
 // Small helper: sanitize/normalize body
@@ -305,11 +367,14 @@ exports.updateDocuments = async (req, res) => {
     if (!snap.exists()) return res.status(404).json({ error: "Not found" });
 
     const patch = { updatedAt: new Date().toISOString() };
-    applyUploadedEmployeeFiles(patch, req.files);
+    const uploadedCount = await applyUploadedEmployeeDocuments(
+      patch,
+      req.files,
+      tenantId,
+      req.params.id
+    );
 
-    const hasDocument =
-      patch.contractBase64 || patch.profilePicBase64 || patch.idDocBase64;
-    if (!hasDocument) {
+    if (!uploadedCount) {
       return res.status(400).json({ error: "Upload at least one document" });
     }
 
@@ -318,7 +383,10 @@ exports.updateDocuments = async (req, res) => {
     res.json({ id: after.key, ...after.val() });
   } catch (e) {
     console.error("employees.updateDocuments error:", e);
-    res.status(500).json({ error: "Failed to update employee documents" });
+    res.status(500).json({
+      error: "Failed to update employee documents",
+      detail: e?.message || String(e),
+    });
   }
 };
 

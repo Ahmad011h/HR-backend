@@ -3,7 +3,11 @@ const express = require("express");
 const router = express.Router({ mergeParams: true });
 
 const multer = require("multer");
-const upload = multer();
+const upload = multer({
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+  },
+});
 
 const auth = require("../middlewares/auth");
 const tenant = require("../middlewares/tenant");
