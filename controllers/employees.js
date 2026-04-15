@@ -76,6 +76,8 @@ async function uploadEmployeeFile({ tenantId, employeeId, field, file }) {
     fileName: file.originalname,
     storagePath: objectPath,
     url,
+    mimeType: file.mimetype || "application/octet-stream",
+    size: file.size || file.buffer?.length || 0,
   };
 }
 
@@ -91,11 +93,13 @@ async function applyUploadedEmployeeDocuments(target, files = {}, tenantId, empl
     const file = files?.[field]?.[0];
     if (!file) continue;
 
-    // Keep this endpoint aligned with the original Add Employee upload behavior.
-    // The demo backend stores document blobs directly in Realtime Database.
-    target[`${prefix}FileName`] = file.originalname;
-    target[`${prefix}Base64`] = file.buffer.toString("base64");
-    target[`${prefix}MimeType`] = file.mimetype || "application/octet-stream";
+    const uploaded = await uploadEmployeeFile({ tenantId, employeeId, field, file });
+    target[`${prefix}FileName`] = uploaded.fileName;
+    target[`${prefix}StoragePath`] = uploaded.storagePath;
+    target[`${prefix}Url`] = uploaded.url;
+    target[`${prefix}MimeType`] = uploaded.mimeType;
+    target[`${prefix}Size`] = uploaded.size;
+    target[`${prefix}UploadedAt`] = new Date().toISOString();
     uploadedCount += 1;
   }
 
