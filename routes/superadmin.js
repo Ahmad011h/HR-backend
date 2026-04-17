@@ -8,6 +8,10 @@ const { db } = require("../config/firebaseAdmin");
 const auth = require("../middlewares/auth");
 const requireSuperadmin = require("../middlewares/superadmin");
 const tenantsCtrl = require("../controllers/tenants");
+const formsLettersCtrl = require("../controllers/formsLetters");
+const multer = require("multer");
+const upload = multer();
+const parseSharedFormUpload = upload.fields([{ name: "file", maxCount: 1 }]);
 
 /**
  * POST /api/superadmin/bootstrap
@@ -61,6 +65,24 @@ router.get("/me", auth, requireSuperadmin, async (req, res) => {
  */
 router.get("/tenants", auth, requireSuperadmin, tenantsCtrl.list);
 router.post("/tenants/register", auth, requireSuperadmin, tenantsCtrl.register);
+router.get("/forms-letters", auth, requireSuperadmin, formsLettersCtrl.list);
+router.post(
+  "/forms-letters",
+  auth,
+  requireSuperadmin,
+  (req, res, next) => {
+    parseSharedFormUpload(req, res, (err) => {
+      if (!err) return next();
+      return res.status(400).json({
+        error: "Failed to parse file upload",
+        detail: err.message || String(err),
+        code: err.code || null,
+      });
+    });
+  },
+  formsLettersCtrl.create
+);
+router.delete("/forms-letters/:id", auth, requireSuperadmin, formsLettersCtrl.remove);
 
 /**
  * DELETE /api/superadmin/tenants/:tenantId

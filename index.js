@@ -50,6 +50,7 @@ const leaveRequestsRoutes  = require("./routes/leaveRequests"); // (moved up jus
 const calendarRoutes       = require("./routes/calendar");
 const timeTrackingRoutes   = require("./routes/timeTracking");
 const salaryRequestsRoutes = require("./routes/salaryRequests");
+const formsLettersRoutes   = require("./routes/formsLetters");
 
 const app = express();
 
@@ -91,6 +92,7 @@ app.use("/public", publicRecruitment);
 app.use("/api/employees",   employeesRoutes);
 app.use("/api/departments", departmentsRoutes);
 app.use("/api/teams",       teamsRoutes);
+app.use("/api/forms-letters", formsLettersRoutes);
 
 /* ------------------------------ Recruitment ------------------------------- */
 app.use("/api/recruitment/jobs",        jobsRouter);
@@ -159,4 +161,3 @@ const PORT = process.env.PORT || 5002;
 app.listen(PORT, () => {
   console.log(`HR server running on http://localhost:${PORT}`);
 });
-
