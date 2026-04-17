@@ -1,5 +1,6 @@
 // server/controllers/employees.js
 const { db, admin, bucket } = require("../config/firebaseAdmin");
+const { v4: uuidv4 } = require("uuid");
 
 // Resolve tenantId from middleware, path param, or header
 function getTenantId(req) {
@@ -45,7 +46,23 @@ const safeFileName = (name = "document") =>
     .replace(/\s+/g, "-")
     .slice(0, 120);
 
+const MAX_EMPLOYEE_FILE_BYTES = 15 * 1024 * 1024;
+
+function acceptsEmployeeFile(mimetype = "") {
+  return (
+    String(mimetype).startsWith("image/") ||
+    mimetype === "application/pdf"
+  );
+}
+
 async function uploadEmployeeFile({ tenantId, employeeId, field, file }) {
+  if (!acceptsEmployeeFile(file.mimetype)) {
+    throw new Error(`Unsupported file type for ${field}: ${file.mimetype || "unknown"}`);
+  }
+  if ((file.size || 0) > MAX_EMPLOYEE_FILE_BYTES) {
+    throw new Error(`${field} exceeds the 15MB upload limit`);
+  }
+
   const objectPath = [
     "tenants",
     tenantId,
@@ -56,21 +73,25 @@ async function uploadEmployeeFile({ tenantId, employeeId, field, file }) {
   ].join("/");
 
   const storageFile = bucket.file(objectPath);
+  const downloadToken = uuidv4();
+
   await storageFile.save(file.buffer, {
-    resumable: false,
     metadata: {
       contentType: file.mimetype || "application/octet-stream",
       metadata: {
+        firebaseStorageDownloadTokens: downloadToken,
         originalName: file.originalname,
         field,
       },
     },
+    resumable: false,
+    public: false,
+    validation: "crc32c",
   });
 
-  const [url] = await storageFile.getSignedUrl({
-    action: "read",
-    expires: "2500-01-01",
-  });
+  const url = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(
+    objectPath
+  )}?alt=media&token=${downloadToken}`;
 
   return {
     fileName: file.originalname,
@@ -78,6 +99,7 @@ async function uploadEmployeeFile({ tenantId, employeeId, field, file }) {
     url,
     mimeType: file.mimetype || "application/octet-stream",
     size: file.size || file.buffer?.length || 0,
+    token: downloadToken,
   };
 }
 
@@ -99,6 +121,7 @@ async function applyUploadedEmployeeDocuments(target, files = {}, tenantId, empl
     target[`${prefix}Url`] = uploaded.url;
     target[`${prefix}MimeType`] = uploaded.mimeType;
     target[`${prefix}Size`] = uploaded.size;
+    target[`${prefix}DownloadToken`] = uploaded.token;
     target[`${prefix}UploadedAt`] = new Date().toISOString();
     uploadedCount += 1;
   }
