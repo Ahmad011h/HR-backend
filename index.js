@@ -51,6 +51,7 @@ const calendarRoutes       = require("./routes/calendar");
 const timeTrackingRoutes   = require("./routes/timeTracking");
 const salaryRequestsRoutes = require("./routes/salaryRequests");
 const formsLettersRoutes   = require("./routes/formsLetters");
+const employeeArchivesRoutes = require("./routes/employeeArchives");
 
 const app = express();
 
@@ -93,6 +94,7 @@ app.use("/api/employees",   employeesRoutes);
 app.use("/api/departments", departmentsRoutes);
 app.use("/api/teams",       teamsRoutes);
 app.use("/api/forms-letters", formsLettersRoutes);
+app.use("/api/employee-archives", employeeArchivesRoutes);
 
 /* ------------------------------ Recruitment ------------------------------- */
 app.use("/api/recruitment/jobs",        jobsRouter);
