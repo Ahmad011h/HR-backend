@@ -30,11 +30,15 @@ exports.profile = async (req, res) => {
         ok: true,
         uid: req.uid,
         tenantId: null,
+        tenant: null,
         memberships,       // {}
         isSuperadmin,      // let the client route superadmins to /superadmin/tenants
         employee: null,    // no employee context yet
       });
     }
+
+    const tenantMetaSnap = await db.ref(`tenants/${tenantId}/meta`).once("value");
+    const tenantMeta = tenantMetaSnap.val() || null;
 
     // 3) Try to resolve employee in that tenant (by uid, then email)
     let employee = null;
@@ -61,6 +65,7 @@ exports.profile = async (req, res) => {
         ok: true,
         uid: req.uid,
         tenantId,
+        tenant: tenantMeta ? { id: tenantId, ...tenantMeta } : { id: tenantId },
         memberships,
         isSuperadmin,
         employee: null,
@@ -72,6 +77,7 @@ exports.profile = async (req, res) => {
       ok: true,
       uid: employee.uid || req.uid,
       tenantId,
+      tenant: tenantMeta ? { id: tenantId, ...tenantMeta } : { id: tenantId },
       memberships,               // { [tenantId]: { role, createdAt } }
       isSuperadmin,
       employee: {
